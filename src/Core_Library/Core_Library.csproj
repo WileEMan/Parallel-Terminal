@@ -45,9 +45,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ConsoleTracker.cs" />
-    <Compile Include="Framework2\ConsoleApi.cs" />
-    <Compile Include="Framework2\ProcessLauncherTest.cs" />
-    <Compile Include="Framework2\wbPipes.cs" />
+    <Compile Include="Framework\ConsoleApi.cs" />
+    <Compile Include="Framework\ProcessLauncher.cs" />
+    <Compile Include="Framework\wbPipes.cs" />
     <Compile Include="HostPortalService.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -55,35 +55,7 @@
       <DependentUpon>HostPortalService.cs</DependentUpon>
     </Compile>
     <Compile Include="SlaveCore.cs" />
-    <None Include="Framework\AsyncStreamReader.cs" />
-    <None Include="Framework\BCLDebug.cs" />
-    <None Include="Framework\Buffer.cs" />
-    <None Include="Framework\CounterSample.cs" />
-    <None Include="Framework\ExternDll.cs" />
-    <None Include="Framework\NativeMethods.cs" />
-    <None Include="Framework\PerformanceCounterLib.cs" />
-    <None Include="Framework\ProcessEx.cs" />
-    <None Include="Framework\ProcessManager.cs" />
-    <None Include="Framework\ProcessThread.cs">
-      <SubType>Component</SubType>
-    </None>
-    <None Include="Framework\SafeFileMappingHandle.cs" />
-    <None Include="Framework\SafeFileMapViewHandle.cs" />
-    <None Include="Framework\SafeHandles.cs" />
-    <None Include="Framework\SafeLibraryHandle.cs" />
-    <None Include="Framework\SafeLocalAllocHandle.cs" />
-    <None Include="Framework\SafeLocalMemHandle.cs" />
-    <None Include="Framework\SafeNativeMethods.cs" />
-    <None Include="Framework\SafeSecurityHandles.cs" />
-    <None Include="Framework\SecureString.cs" />
-    <None Include="Framework\SharedPerformanceCounter.cs" />
-    <None Include="Framework\SharedUtils.cs" />
-    <None Include="Framework\StringBuilderCache.cs" />
-    <None Include="Framework\UnsafeNativeMethods.cs" />
-    <None Include="Framework\wbWin32Process.cs" />
-    <None Include="Framework\win32native.cs" />
     <Compile Include="CommonCore.cs" />
-    <Compile Include="Framework2\ProcessLauncher.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
