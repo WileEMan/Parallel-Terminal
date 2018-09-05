@@ -37,6 +37,8 @@ namespace Core_Library
     }
 
     /// <summary>
+    /// UPDATE: I don't believe this class is used anymore.  I don't use pipes now, and don't redirect StdOut, etc. anymore.  Now we're accessing the console directly.
+    /// 
     /// UPDATE: Now supports FileStreams provided by the ProcessLauncher().
     /// 
     /// There seems to be no way to call the StandardError and StandardOutput streams that is non-blocking but character level except this.  The call to StreamReader.ReadLine()
@@ -435,25 +437,29 @@ namespace Core_Library
                             // limit is at 65536 allowing some margin plus the wrapping.
                             const int MaxSize = 12000;
 
-                            // TODO: Should also add a spot check mechanism to ReadNew() that checks one or two random lines from earlier in the console.
-                            // If they don't match, return stale and regenerate the whole thing.
-
                             bool Stale = false;
-                            string NewText = CT.ReadNew(out Stale, true, MaxSize);
+                            bool MaxedMessage = false;
+                            int ScrolledLines = 0;
+                            string NewText = "";
+                            ScrolledLines = CT.CheckForLineScroll(out Stale);
+                            if (!Stale) NewText = CT.ReadNew(out Stale, out MaxedMessage, true, MaxSize);
+                            if (!Stale) CT.SpotCheckState(MaxedMessage, out Stale);
                             if (Stale)
                             {
-                                NewText = CT.ReadWholeConsole(MaxSize);                                
+                                NewText = CT.ReadWholeConsole(MaxSize);
                                 string EncodedText = System.Convert.ToBase64String(Encoding.Unicode.GetBytes(NewText));
                                 string XmlMsg = "<Whole-Console>" + EncodedText + "</Whole-Console>";
                                 byte[] RawMsg = Encoding.Unicode.GetBytes(XmlMsg);
                                 SendMessage(Stream, RawMsg);
                             }
-                            else if (NewText.Length > 0 && NewText.Contains("\n"))
-                            {                                
+                            else if ((NewText.Length > 0 && NewText.Contains("\n")) || ScrolledLines != 0)
+                            {
                                 string EncodedText = System.Convert.ToBase64String(Encoding.Unicode.GetBytes(NewText));
                                 //string XmlMsg = "<Console-New Last-X=\"" + CT.LastCursorPosition.X + "\" Last-Y=\"" + CT.LastCursorPosition.Y + "\">" + EncodedText + "</Console-New>";                                
-                                string XmlMsg = "<Console-New>" + EncodedText + "</Console-New>";
-                                byte[] RawMsg = Encoding.Unicode.GetBytes(XmlMsg);                                
+                                string XmlMsg;
+                                if (NewText.Length > 0 && NewText.Contains("\n")) XmlMsg = "<Console-New Scrolled=\"" + ScrolledLines.ToString() + "\">" + EncodedText + "</Console-New>";
+                                else XmlMsg = "<Console-New Scrolled=\"" + ScrolledLines.ToString() + "\" />";
+                                byte[] RawMsg = Encoding.Unicode.GetBytes(XmlMsg);
                                 SendMessage(Stream, RawMsg);
                             }
                             else

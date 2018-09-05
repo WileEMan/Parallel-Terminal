@@ -14,9 +14,9 @@ using System.Diagnostics;
 using System.Globalization;
 
 namespace Parallel_Terminal
-{
-    // TODO: What happens when a console reaches its vertical dimension and removes old content from the top, instead of continuously moving the cursor down?  This doesn't take much to happen, it turns out- just about a page.  The "Reload All Consoles" item
-    // can correct it once, but this is a breaking problem.
+{    
+    // TODO: when I try to access a machine using logon credentials that aren't valid for that machine (probably "permission to logon locally" or something) I get a communication error message/timeout instead of an informative, "Your credentials are
+    // no good here." message.
 
     // TODO: copy-and-paste would be very nice.
     
@@ -595,7 +595,11 @@ namespace Parallel_Terminal
                 //int lasty = int.Parse(xMsg.Attribute("Last-Y").Value);
                 //Debug.WriteLine("Received from host '" + FromSlave.HostName + "' Console-New @ " + lastx + ", " + lasty);
 
+                int Scrolled = 0;
+                if (xMsg.Attribute("Scrolled") != null) Scrolled = int.Parse(xMsg.Attribute("Scrolled").Value);
                 string DecodedText = Encoding.Unicode.GetString(System.Convert.FromBase64String(xMsg.Value));
+
+                if (Scrolled > 0) ScrollConsoleText(FromSlave, Scrolled);
                 AddText(FromSlave, DecodedText, false, true);
             }
 
@@ -666,6 +670,51 @@ namespace Parallel_Terminal
             Invalidate();
         }
 
+        void RemoveDisplaySequenceGaps()
+        {
+            lock (SlaveBuffers)
+            {
+                // We'll need to be able to index against SlaveBuffers...
+                List<SlaveBuffer> AllBuffers = new List<SlaveBuffer>();
+                foreach (var kvp in SlaveBuffers)
+                {
+                    AllBuffers.Add(kvp.Value);
+                }
+
+                // Pass- renumber display sequence where any gaps exist up to MaxDisplaySequence, in case we've now created
+                // holes in the DisplaySequence sequence.
+                int[] Index = new int[AllBuffers.Count];
+                for (int ii = 0; ii < Index.Length; ii++) Index[ii] = 0;
+                int Delta = 0;
+                for (int iSeq = 0; ;)
+                {
+                    // See if this DisplaySequence still exists anywhere...
+                    bool Found = false;
+                    bool End = true;
+                    for (int iSB = 0; iSB < AllBuffers.Count; iSB++)
+                    {
+                        for (; Index[iSB] < AllBuffers[iSB].Lines.Count;)
+                        {
+                            End = false;
+                            Line ln = AllBuffers[iSB].Lines[Index[iSB]];
+                            if (ln.DisplaySequence + Delta > iSeq) break;           // Avoid modifying the DisplaySequence of any line more than once by predicting here if we are ahead of our current iSeq.
+                            ln.DisplaySequence += Delta;
+                            if (ln.DisplaySequence == iSeq) { Found = true; break; }
+                            Index[iSB]++;
+                        }
+                        // We cannot break early if Found because we are also renumbering as we go (applying Delta).
+                    }
+                    if (End) break;
+                    if (Found) { iSeq++; continue; }
+
+                    // This iSeq was not found in any of the other buffers (and IntoBuffer is now empty).  So we have found a gap.  Renumber every display sequence higher than this one.
+                    // To accomplish this, we simply decrement Delta.  This is applied to all lines going forward and renumbers them.  We avoid incrementing iSeq here because we have now
+                    // reduced all further DisplaySequence values by one more.
+                    Delta--;
+                }
+            }
+        }
+
         public void ClearWholeConsole(Slave FromSlave)
         {
             lock (SlaveBuffers)
@@ -686,50 +735,54 @@ namespace Parallel_Terminal
                 // Second- actually remove all lines
                 IntoBuffer.Lines.Clear();
 
-                // We'll need to be able to index against SlaveBuffers...
-                List<SlaveBuffer> OtherBuffers = new List<SlaveBuffer>();
+                // Third pass, remove any gaps we've introduced.
+                RemoveDisplaySequenceGaps();
+
+                // Lastly, reset this optimization cross-reference index
                 foreach (var kvp in SlaveBuffers)
                 {
                     if (kvp.Value == IntoBuffer) continue;
-                    OtherBuffers.Add(kvp.Value);
+                    if (kvp.Value.LastCommon.ContainsKey(IntoBuffer)) kvp.Value.LastCommon[IntoBuffer] = -1;
                 }
+                IntoBuffer.LastCommon.Clear();
+            }
+        }
 
-                // Third, second pass- renumber display sequence where any gaps exist up to MaxDisplaySequence, in case we've now created
-                // holes in the DisplaySequence sequence.
-                int[] Index = new int[OtherBuffers.Count];
-                for (int ii = 0; ii < Index.Length; ii++) Index[ii] = 0;
-                int Delta = 0;
-                for (int iSeq = 0; ;)
+        public void ScrollConsoleText(Slave FromSlave, int Lines)
+        {
+            lock (SlaveBuffers)
+            {
+                SlaveBuffer IntoBuffer = SlaveBuffers[FromSlave];
+
+                Debug.Assert(IntoBuffer.Lines.Count >= Lines);      // Debug assertion: the delta routine managed to scroll lines out the top of the buffer that never got added into the buffer in the first place.  Worse than out of sync, ConsoleTracker or SlaveBuffers have dropped something.
+                if (IntoBuffer.Lines.Count < Lines) return;
+                int FirstDisplaySeqAffected = IntoBuffer.Lines[0].DisplaySequence;
+
+                // First pass- disconnect all siblings connected to this slave buffer that fall in the affected range.
+                for (int ii = 0; ii < IntoBuffer.Lines.Count && ii < Lines; ii++)
                 {
-                    // See if this DisplaySequence still exists anywhere...
-                    bool Found = false;
-                    bool End = true;
-                    for (int iSB = 0; iSB < OtherBuffers.Count; iSB++)
+                    if (IntoBuffer.Lines[ii].Siblings.Count > 0)
                     {
-                        for (; Index[iSB] < OtherBuffers[iSB].Lines.Count;)
-                        {
-                            End = false;
-                            Line ln = OtherBuffers[iSB].Lines[Index[iSB]];
-                            if (ln.DisplaySequence + Delta > iSeq) break;           // Avoid modifying the DisplaySequence of any line more than once by predicting here if we are ahead of our current iSeq.
-                            ln.DisplaySequence += Delta;
-                            if (ln.DisplaySequence == iSeq) { Found = true; break; }
-                            Index[iSB]++;
-                        }
-                        // We cannot break early if Found because we are also renumbering as we go (applying Delta).
+                        foreach (Line ln in IntoBuffer.Lines[ii].Siblings)
+                            ln.Siblings.Remove(IntoBuffer.Lines[ii]);
                     }
-                    if (End) break;
-                    if (Found) { iSeq++; continue; }
-
-                    // This iSeq was not found in any of the other buffers (and IntoBuffer is now empty).  So we have found a gap.  Renumber every display sequence higher than this one.
-                    // To accomplish this, we simply decrement Delta.  This is applied to all lines going forward and renumbers them.  We avoid incrementing iSeq here because we have now
-                    // reduced all further DisplaySequence values by one more.
-                    Delta--;
                 }
+
+                // Second- actually remove all lines
+                IntoBuffer.Lines.RemoveRange(0, Lines);
+
+                // Third pass, remove any gaps we've introduced.
+                RemoveDisplaySequenceGaps();
 
                 // Lastly, reset this optimization cross-reference index
-                foreach (var Buffer in OtherBuffers)
-                    if (Buffer.LastCommon.ContainsKey(IntoBuffer)) Buffer.LastCommon[IntoBuffer] = -1;
+                foreach (var kvp in SlaveBuffers)
+                {
+                    if (kvp.Value == IntoBuffer) continue;
+                    if (kvp.Value.LastCommon.ContainsKey(IntoBuffer)) kvp.Value.LastCommon[IntoBuffer] = -1;
+                }
                 IntoBuffer.LastCommon.Clear();
+
+                BuildCurrentLayout(FirstDisplaySeqAffected);
             }
         }
 
