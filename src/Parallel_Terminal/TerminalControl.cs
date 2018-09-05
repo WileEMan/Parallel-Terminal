@@ -15,6 +15,9 @@ using System.Globalization;
 
 namespace Parallel_Terminal
 {
+    // TODO: What happens when a console reaches its vertical dimension and removes old content from the top, instead of continuously moving the cursor down?  This doesn't take much to happen, it turns out- just about a page.  The "Reload All Consoles" item
+    // can correct it once, but this is a breaking problem.
+
     // TODO: copy-and-paste would be very nice.
     
     /// <summary>

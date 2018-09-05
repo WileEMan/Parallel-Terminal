@@ -42,6 +42,8 @@
             this.addHostStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.consolesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.reloadAllToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.groupsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.addGroupToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             ((System.ComponentModel.ISupportInitialize)(this.MainSplitContainer)).BeginInit();
             this.MainSplitContainer.Panel1.SuspendLayout();
             this.MainSplitContainer.Panel2.SuspendLayout();
@@ -109,6 +111,7 @@
             this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.fileToolStripMenuItem,
             this.hostsToolStripMenuItem,
+            this.groupsToolStripMenuItem,
             this.consolesToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
             this.menuStrip1.Name = "menuStrip1";
@@ -142,7 +145,7 @@
             // addHostStripMenuItem
             // 
             this.addHostStripMenuItem.Name = "addHostStripMenuItem";
-            this.addHostStripMenuItem.Size = new System.Drawing.Size(105, 22);
+            this.addHostStripMenuItem.Size = new System.Drawing.Size(152, 22);
             this.addHostStripMenuItem.Text = "&Add...";
             this.addHostStripMenuItem.Click += new System.EventHandler(this.addHostStripMenuItem_Click);
             // 
@@ -160,6 +163,21 @@
             this.reloadAllToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
             this.reloadAllToolStripMenuItem.Text = "&Reload all";
             this.reloadAllToolStripMenuItem.Click += new System.EventHandler(this.reloadAllToolStripMenuItem_Click);
+            // 
+            // groupsToolStripMenuItem
+            // 
+            this.groupsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.addGroupToolStripMenuItem});
+            this.groupsToolStripMenuItem.Name = "groupsToolStripMenuItem";
+            this.groupsToolStripMenuItem.Size = new System.Drawing.Size(57, 20);
+            this.groupsToolStripMenuItem.Text = "&Groups";
+            // 
+            // addGroupToolStripMenuItem
+            // 
+            this.addGroupToolStripMenuItem.Name = "addGroupToolStripMenuItem";
+            this.addGroupToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
+            this.addGroupToolStripMenuItem.Text = "&Add Group...";
+            this.addGroupToolStripMenuItem.Click += new System.EventHandler(this.addGroupToolStripMenuItem_Click);
             // 
             // MainForm
             // 
@@ -202,6 +220,8 @@
         private MarkerLegendControl Legend;
         private System.Windows.Forms.ToolStripMenuItem consolesToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem reloadAllToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem groupsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem addGroupToolStripMenuItem;
     }
 }
 

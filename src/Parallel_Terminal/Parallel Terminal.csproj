@@ -48,6 +48,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AddGroupForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="AddGroupForm.Designer.cs">
+      <DependentUpon>AddGroupForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="AddHostForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -55,6 +61,7 @@
       <DependentUpon>AddHostForm.cs</DependentUpon>
     </Compile>
     <Compile Include="CredentialsDialog.cs" />
+    <Compile Include="HostGroup.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -84,6 +91,9 @@
     <Compile Include="ValidateCertificateForm.Designer.cs">
       <DependentUpon>ValidateCertificateForm.cs</DependentUpon>
     </Compile>
+    <EmbeddedResource Include="AddGroupForm.resx">
+      <DependentUpon>AddGroupForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="AddHostForm.resx">
       <DependentUpon>AddHostForm.cs</DependentUpon>
     </EmbeddedResource>

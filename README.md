@@ -2,7 +2,7 @@
 
 Parallel Terminal and the Parallel Terminal Host Portal are a simple software tool for interacting with the command prompt of multiple computers at once.  The Parallel Terminal is a Windows GUI application that displays a list of hosts on the left and a command prompt on the right.  The command prompt provides a "DIFF" like behavior, as output from different computers is compared line-by-line.  Any common lines from multiple computers are merged and shown as one line, whereas differences in the output (or input) sent to individual or subsets of computers are shown on their own lines.  A color coding system is shown to the left of each line to make it easy to identify the source of each line.  Commands can be typed and sent to the multiple computers simultaneously or individually by checking the box next to the hosts you currently want to interact with before typing.
 
-The Parallel Terminal and Host Portal are written in C# and communicate via a SSL socket that provides encryption and security.  To access a remote computer, a valid login to that computer is required as validated by Windows.
+The Parallel Terminal and Host Portal are written in C# (VS2015) and communicates via a SSL socket that provides encryption and security.  To access a remote computer, a valid login to that computer is required as validated by Windows.
 
 ## Getting Started
 

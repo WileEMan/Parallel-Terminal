@@ -79,6 +79,8 @@ namespace Parallel_Terminal
             GC.SuppressFinalize(true);
         }
 
+        public bool IsConnecting { get { return Connection.CurrentState == Slave_Connection.Connection_State.Connecting || Connection.CurrentState == Slave_Connection.Connection_State.EncryptionEstablished; } }
+
         public bool IsConnected { get { return Connection.CurrentState == Slave_Connection.Connection_State.Connected; } }
 
         public bool IsDisconnected { get { return Connection.CurrentState == Slave_Connection.Connection_State.Disconnected; } }

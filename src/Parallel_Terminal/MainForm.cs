@@ -1,9 +1,4 @@
-﻿// TODO: currently the slave accepts any authentication.  I'm not even sure it does that properly.  Needs to be checked before being a secure application.  But,
-// even besides that, once it accepts the authentication, it launches the command prompt process under the service's account.  If you authenticate as someone
-// with wimpy priviledges, then you gain access to the service's account, be it an administrator or anything else.  Totally insecure setup.  Keep away from
-// non-admins until fixed.
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -27,8 +22,10 @@ namespace Parallel_Terminal
         /// </summary>
         List<Slave> Slaves = new List<Slave>();
 
+        List<HostGroup> Groups = new List<HostGroup>();        
+
         Stopwatch SinceStart = Stopwatch.StartNew();
-        Stopwatch SinceCredentials = new Stopwatch();
+        //Stopwatch SinceCredentials = new Stopwatch();
 
         SlaveCore LocalHostSlave;
         object ConsoleLock = new object();
@@ -49,9 +46,8 @@ namespace Parallel_Terminal
             }
         }
 
-        TreeNode HostNodes = new TreeNode("Computers");
-
-        DateTime AutomaticConnectionRequestsAt = DateTime.MinValue;
+        TreeNode HostNodes = new TreeNode("All Hosts");
+        TreeNode GroupNodes = new TreeNode("Groups");        
 
         public MainForm()
         {
@@ -65,7 +61,7 @@ namespace Parallel_Terminal
         NetworkCredential UserCredentials;
 
         #if DEBUG
-        bool StartupDebugging = true;
+        bool StartupDebugging = false;
         #endif
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -98,13 +94,13 @@ namespace Parallel_Terminal
                     return;
                 }
                 UserCredentials = cd.Credentials;
-                SinceCredentials.Start();
 
                 lock (Slaves)
                 {
                     lock (ComputerTree)
                     {
                         ComputerTree.Nodes.Add(HostNodes);
+                        ComputerTree.Nodes.Add(GroupNodes);
 
                         // Add a LocalHost slave running in this process.  Looks just like the service, but runs whenever parallel terminal is running- just in case
                         // the user wants to run something to include localhost.
@@ -120,9 +116,9 @@ namespace Parallel_Terminal
                             foreach (var v in key.GetSubKeyNames())
                             {
                                 Slave NewSlave = new Slave(v, AcceptedCertificates);
-                                Slaves.Add(NewSlave);
+                                Slaves.Add(NewSlave);                                
                             }
-                        }
+                        }                        
 
                         foreach (Slave ss in Slaves)
                         {
@@ -132,25 +128,50 @@ namespace Parallel_Terminal
                             Terminal.AddSlave(ss);
                             TreeNode SlaveNode = new TreeNode(ss.HostName + " (Disconnected)");
                             SlaveNode.Tag = ss;
-                            SlaveNode.Checked = true;
+                            SlaveNode.Checked = false;
                             HostNodes.Nodes.Add(SlaveNode);
                         }
 
-                        GUITimer.Enabled = true;
-
-                        // Can now start connecting them with a high accomodation for failures (since this wasn't a user-initiated connect).
-                        // The exceptions will be received in the GUITimer, however, so we will check the connection time marker to know
-                        // if it was an automatically initiated attempt.
-                        foreach (Slave ss in Slaves)
+                        // Find all groups we've previously had and restore them
+                        key = Registry.CurrentUser.OpenSubKey(GroupsRegSubKey, false);
+                        if (key != null)
                         {
-                            try
-                            {                                
-                                ss.Connect(true, UserCredentials);
-                            }
-                            catch (Exception) { ss.Disconnect(); }
-                        }                        
+                            foreach (var v in key.GetSubKeyNames())
+                            {
+                                var group_key = key.OpenSubKey(v, false);
 
-                        AutomaticConnectionRequestsAt = DateTime.Now;
+                                HostGroup Group = new HostGroup(v);
+                                Groups.Add(Group);
+                                TreeNode GNode = new TreeNode(group_key + " (Disconnected)");
+                                GNode.Tag = Group;
+
+                                object HostList = group_key.GetValue("Includes-Hosts");
+                                if (HostList as string != null)
+                                {
+                                    string[] HostNames = ((string)HostList).Split(new char[] { ';' });
+                                    foreach (string HostName in HostNames)
+                                    {
+                                        Slave Match = null;
+                                        foreach (Slave ss in Slaves)
+                                        {
+                                            if (ss.HostName == HostName) { Match = ss; break; }
+                                        }
+                                        if (Match != null)
+                                        {
+                                            Group.Slaves.Add(Match);
+                                            TreeNode HNode = new TreeNode(Match.HostName + " (Disconnected)");
+                                            HNode.Tag = Match;
+                                            HNode.Checked = false;
+                                            GNode.Nodes.Add(HNode);
+                                        }
+                                    }
+                                }
+                                GNode.Text = Group.GetDisplayText();
+                                GroupNodes.Nodes.Add(GNode);
+                            }
+                        }
+
+                        GUITimer.Enabled = true;                                                
 
                         ComputerTree.ExpandAll();
 
@@ -198,6 +219,7 @@ namespace Parallel_Terminal
 
         const string AppRegSubKey = "Software\\Wiley Black's Software\\Parallel Terminal";
         const string HostRegSubKey = AppRegSubKey + "\\Hosts";
+        const string GroupsRegSubKey = AppRegSubKey + "\\Groups";
         const string AccCertRegSubKey = AppRegSubKey + "\\Accepted_Certificates";
 
         RegistryCertificateStore AcceptedCertificates;
@@ -243,6 +265,51 @@ namespace Parallel_Terminal
             }
         }
 
+        void SaveGroupListToRegistry()
+        {
+            lock (Slaves)
+            {
+                lock (ComputerTree)
+                {
+                    // Clear any existing registry entries that are no longer present.
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(GroupsRegSubKey, true))
+                    {
+                        if (key != null)
+                        {
+                            string[] subkeys = key.GetSubKeyNames();
+                            foreach (string subkey in subkeys)
+                            {
+                                bool StillPresent = false;
+                                foreach (TreeNode tn in GroupNodes.Nodes)
+                                {
+                                    HostGroup ThatGroup = (HostGroup)tn.Tag;
+                                    if (subkey == ThatGroup.Name) { StillPresent = true; break; }
+                                }
+                                if (!StillPresent)
+                                    key.DeleteSubKey(subkey);
+                            }
+                        }
+                    }
+
+                    // Create the listing.
+                    using (RegistryKey key = Registry.CurrentUser.CreateSubKey(GroupsRegSubKey))
+                    {
+                        foreach (TreeNode tn in GroupNodes.Nodes)
+                        {
+                            HostGroup ThatGroup = (HostGroup)tn.Tag;
+                            RegistryKey group_key = key.CreateSubKey(ThatGroup.Name);
+                            string hosts = "";
+                            foreach (Slave ss in ThatGroup.Slaves) {
+                                if (hosts.Length > 0) hosts += ";";
+                                hosts += ss.HostName;
+                            }
+                            group_key.SetValue("Includes-Hosts", hosts);
+                        }
+                    }
+                }
+            }
+        }
+
         void SaveSettingsToRegistry()
         {
             RegistryKey key = Registry.CurrentUser.CreateSubKey(AppRegSubKey);
@@ -254,20 +321,38 @@ namespace Parallel_Terminal
             key.SetValue("Terminal_TextFontSize", (int)Terminal.TextFontSizeInPoints);
         }
 
-        List<TreeNode> GetAllSlaveNodes()
+        List<TreeNode> FindAllInstancesOfSlave(string HostName, TreeNode Within = null)
         {
             List<TreeNode> ret = new List<TreeNode>();
-            foreach (TreeNode tn in HostNodes.Nodes) ret.Add(tn);
+            if (Within == null)
+            {
+                foreach (TreeNode tn in ComputerTree.Nodes)
+                    ret.AddRange(FindAllInstancesOfSlave(HostName, tn));
+                return ret;
+            }
+            foreach (TreeNode tn in Within.Nodes)
+            {
+                if (tn.Tag is Slave && ((Slave)(tn.Tag)).HostName == HostName) ret.Add(tn);
+                ret.AddRange(FindAllInstancesOfSlave(HostName, tn));
+            }
             return ret;
         }
 
-        TreeNode FindSlaveNode(TreeNodeCollection FromNodes, Slave ForSlave)
+        List<TreeNode> FindAllInstancesOfGroup(string GroupName, TreeNode Within = null)
         {
-            foreach (TreeNode tn in FromNodes)
+            List<TreeNode> ret = new List<TreeNode>();
+            if (Within == null)
             {
-                if (tn.Tag == ForSlave) return tn;
+                foreach (TreeNode tn in ComputerTree.Nodes)
+                    ret.AddRange(FindAllInstancesOfGroup(GroupName, tn));
+                return ret;
             }
-            return null;
+            foreach (TreeNode tn in Within.Nodes)
+            {
+                if (tn.Tag is HostGroup && ((HostGroup)(tn.Tag)).Name == GroupName) ret.Add(tn);
+                ret.AddRange(FindAllInstancesOfGroup(GroupName, tn));
+            }
+            return ret;
         }
 
         Slave FindSlave(Slave_Connection With_Connection)
@@ -357,7 +442,7 @@ namespace Parallel_Terminal
         }
 
         #if DEBUG
-        bool PendingSelfTest = true;
+        //bool PendingSelfTest = true;
         #endif
 
         private void GUITimer_Tick(object sender, EventArgs e)
@@ -365,6 +450,7 @@ namespace Parallel_Terminal
             /** Process startup diagnostics when appropriate **/
 
             #if DEBUG
+            /*
             if (PendingSelfTest && SinceCredentials.ElapsedMilliseconds > 3000)
             {
                 Terminal.SelfTest();
@@ -375,6 +461,7 @@ namespace Parallel_Terminal
                 StartupDebugging = false;
                 FinishDebugTests();
             }
+            */
             #endif
 
             /** Process any exceptions that happened on slave worker threads **/
@@ -408,10 +495,8 @@ namespace Parallel_Terminal
 
                     lock (ComputerTree)
                     {
-                        foreach (TreeNode CurrentNode in GetAllSlaveNodes())
+                        foreach (TreeNode CurrentNode in FindAllInstancesOfSlave(CurrentSlave.HostName))
                         {
-                            if (CurrentNode.Tag != CurrentSlave) continue;
-
                             switch (SCI.Item2)
                             {
                                 case Slave_Connection.Connection_State.Connecting:
@@ -440,6 +525,10 @@ namespace Parallel_Terminal
 
                                 default: throw new NotSupportedException();
                             }
+
+                            TreeNode tnGroup = CurrentNode.Parent;
+                            if (!(tnGroup.Tag is HostGroup)) continue;
+                            tnGroup.Text = ((HostGroup)tnGroup.Tag).GetDisplayText();
                         }
                     }
                 }
@@ -451,17 +540,46 @@ namespace Parallel_Terminal
             //e.Node.Checked = !e.Node.Checked;            
         }
 
+        bool ComputerTree_AfterCheck_Executing = false;
         private void ComputerTree_AfterCheck(object sender, TreeViewEventArgs e)
         {
-            lock (ComputerTree)
+            if (ComputerTree_AfterCheck_Executing) return;          // Prevent recursion.
+            ComputerTree_AfterCheck_Executing = true;
+            try
             {
-                List<Slave> Selected = new List<Slave>();
-                foreach (TreeNode Node in HostNodes.Nodes)
+                lock (ComputerTree)
                 {
-                    if (Node.Checked) Selected.Add((Slave)Node.Tag);                    
-                }
+                    if (e != null)
+                    {
+                        if (e.Node.Tag is Slave)
+                        {
+                            bool NewState = e.Node.Checked;
+                            List<TreeNode> Copies = FindAllInstancesOfSlave(((Slave)e.Node.Tag).HostName);
+                            foreach (TreeNode tn in Copies) tn.Checked = NewState;
+                        }
+                        else if (e.Node.Tag is HostGroup)
+                        {
+                            bool NewState = e.Node.Checked;
+                            foreach (Slave ss in ((HostGroup)e.Node.Tag).Slaves)
+                            {
+                                List<TreeNode> Copies = FindAllInstancesOfSlave(ss.HostName);
+                                foreach (TreeNode tn in Copies) tn.Checked = NewState;
+                            }
+                        }
+                    }
 
-                Terminal.SetCurrentTextDisplay(Selected);
+                    List<Slave> Selected = new List<Slave>();
+                    foreach (TreeNode Node in HostNodes.Nodes)
+                    {
+                        if (Node.Checked && Node.Tag is Slave) Selected.Add((Slave)Node.Tag);
+                    }
+
+                    Terminal.SetCurrentTextDisplay(Selected);
+                }
+            }
+            finally
+            {
+                ComputerTree_AfterCheck_Executing = false;
             }
         }
 
@@ -479,12 +597,19 @@ namespace Parallel_Terminal
             Close();
         }
 
+        /// <summary>
+        /// LastAdditions is used only by instantiations of AddHostForm to remember the user's last selections
+        /// and pre-select those same ones again in case they are repeating their previous add.
+        /// </summary>
+        List<HostGroup> LastAdditions;
+
         private void addHostStripMenuItem_Click(object sender, EventArgs e)
         {
-            AddHostForm ahf = new AddHostForm();
+            AddHostForm ahf = new AddHostForm(Groups, LastAdditions);
             if (ahf.ShowDialog() != DialogResult.OK) return;
+            LastAdditions = ahf.Membership;
 
-            Slave NewSlave = new Slave(ahf.Hostname, AcceptedCertificates);
+            Slave NewSlave = new Slave(ahf.HostName, AcceptedCertificates);
             lock (Slaves)
             {
                 NewSlave.Connection.OnMessage += Slave_Connection_OnMessage;
@@ -494,47 +619,247 @@ namespace Parallel_Terminal
                 lock (ComputerTree)
                 {
                     Terminal.AddSlave(NewSlave);
-                    TreeNode SlaveNode = new TreeNode(NewSlave.HostName + " (Disconnected)");
+                    string Display = NewSlave.HostName + " (Disconnected)";
+                    TreeNode SlaveNode = new TreeNode(Display);
                     SlaveNode.Tag = NewSlave;
-                    HostNodes.Nodes.Add(SlaveNode);
+                    HostNodes.Nodes.Add(SlaveNode);                    
+
+                    foreach (HostGroup Group in LastAdditions)
+                    {
+                        Group.Slaves.Add(NewSlave);
+                        List<TreeNode> Instances = FindAllInstancesOfGroup(Group.Name);
+                        foreach (TreeNode tn in Instances)
+                        {
+                            TreeNode GNode = new TreeNode(Display);
+                            GNode.Tag = NewSlave;
+                            tn.Nodes.Add(GNode);
+                            tn.Text = Group.GetDisplayText();
+                        }
+                    }
+
                     Legend.Invalidate();
                 }
             }
 
             SaveHostListToRegistry();
+            SaveGroupListToRegistry();
         }
 
         TreeNode ContextNode = null;
 
-        private void OnRemoveNode_MenuItemClick(object sender, EventArgs e)
+        private void OnEditMembership_MenuItemClick(object sender, EventArgs e)
         {
             if (ContextNode == null) return;
             Slave ss = ContextNode.Tag as Slave;
             if (ss == null) return;
-            if (MessageBox.Show("Remove the host '" + ss.HostName + "'?", "Please confirm", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+
+            List<HostGroup> Memberships = new List<HostGroup>();
+            lock (Slaves)
+            {
+                lock (ComputerTree)
+                {
+                    foreach (TreeNode v in GroupNodes.Nodes)
+                    {
+                        HostGroup Group = v.Tag as HostGroup;
+                        if (Group.Slaves.Contains(ss)) Memberships.Add(Group);
+                    }
+                }
+            }
+
+            AddHostForm ahf = new AddHostForm(Groups, Memberships);
+            ahf.HostName = ss.HostName;
+            if (ahf.ShowDialog() != DialogResult.OK) return;
+            Memberships = ahf.Membership;
 
             lock (Slaves)
             {
                 lock (ComputerTree)
                 {
-                    Slaves.Remove(ss);
-                    Terminal.RemoveSlave(ss);
-                    HostNodes.Nodes.Remove(ContextNode);
+                    List<TreeNode> ExistingInstances = FindAllInstancesOfSlave(ss.HostName);
+                    foreach (TreeNode tnGroup in GroupNodes.Nodes)
+                    {
+                        HostGroup Group = (HostGroup)tnGroup.Tag;
+                        if (Memberships.Contains(Group))
+                        {
+                            if (!Group.Slaves.Contains(ss))
+                            {
+                                // New membership added...                    
+                                Group.Slaves.Add(ss);
+                                TreeNode GNode = new TreeNode(ContextNode.Text);
+                                GNode.Tag = ss;
+                                tnGroup.Nodes.Add(GNode);
+                                tnGroup.Text = Group.GetDisplayText();
+                            }
+                        }
+                        else
+                        {
+                            if (Group.Slaves.Contains(ss))
+                            {
+                                // Existing membership revoked...
+                                Group.Slaves.Remove(ss);
+                                List<TreeNode> hits = new List<TreeNode>();
+                                foreach (TreeNode tnHosts in tnGroup.Nodes)
+                                {
+                                    if (((Slave)tnHosts.Tag).HostName == ss.HostName) hits.Add(tnHosts);
+                                }
+                                foreach (TreeNode tn in hits) tnGroup.Nodes.Remove(tn);
+                                tnGroup.Text = Group.GetDisplayText();
+                            }
+                        }
+                    }
+
                     Legend.Invalidate();
                 }
             }
 
             SaveHostListToRegistry();
+            SaveGroupListToRegistry();
+        }
+
+        private void addGroupToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            AddGroupForm agf = new AddGroupForm();
+            for (;;)
+            { 
+                if (agf.ShowDialog() != DialogResult.OK) return;
+
+                bool NameExists = false;
+                lock (Slaves)
+                {
+                    lock (ComputerTree)
+                    {                        
+                        foreach (HostGroup Existing in Groups)
+                        {
+                            if (Existing.Name.ToLower() == agf.GroupName)
+                            {
+                                NameExists = true;
+                                break;
+                            }
+                        }
+
+                        if (!NameExists)
+                        {
+                            HostGroup NewGroup = new HostGroup(agf.GroupName);
+                            Groups.Add(NewGroup);
+
+                            TreeNode GroupNode = new TreeNode(NewGroup.GetDisplayText());
+                            GroupNode.Tag = NewGroup;
+                            GroupNodes.Nodes.Add(GroupNode);
+
+                            Legend.Invalidate();
+                        }
+                    }
+                }
+
+                if (NameExists)
+                {
+                    if (MessageBox.Show("A group by that name already exists.") != DialogResult.OK) return;
+                    continue;
+                }
+
+                break;
+            }
+
+            SaveHostListToRegistry();
+            SaveGroupListToRegistry();
+        }
+
+        void RemoveHost(Slave ss)
+        {
+            lock (Slaves)
+            {
+                lock (ComputerTree)
+                {
+                    List<TreeNode> Instances = FindAllInstancesOfSlave(ss.HostName);
+
+                    Slaves.Remove(ss);
+                    Terminal.RemoveSlave(ss);
+                    foreach (TreeNode tn in Instances)
+                    {
+                        tn.Parent.Nodes.Remove(tn);
+                        tn.Parent.Text = ((HostGroup)tn.Parent.Tag).GetDisplayText();
+                    }
+                    Legend.Invalidate();
+                }
+            }
+        }
+
+        private void OnRemoveNode_MenuItemClick(object sender, EventArgs e)
+        {
+            if (ContextNode == null) return;            
+            if (ContextNode.Tag is Slave)
+            {
+                Slave ss = ContextNode.Tag as Slave;
+
+                // Removing a slave...            
+                if (MessageBox.Show("Remove the host '" + ss.HostName + "'?", "Please confirm", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+
+                lock (ComputerTree)
+                {
+                    List<TreeNode> Instances = FindAllInstancesOfSlave(ss.HostName);
+                    if (Instances.Count > 1)
+                        if (MessageBox.Show("The host '" + ss.HostName + "' is a member of " + (Instances.Count - 1).ToString() + " groups.  Are you sure you want to remove it from all listings?", "Please confirm", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+                }
+
+                RemoveHost(ss);
+            }
+            else
+            {
+                HostGroup Group = ContextNode.Tag as HostGroup;
+                if (Group == null) return;
+
+                // Removing a group...            
+                if (MessageBox.Show("Remove the group '" + Group.Name + "'?", "Please confirm", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+
+                bool AlsoHosts = false;
+                switch (MessageBox.Show("Do you also want to remove all hosts that are part of the group '" + Group.Name + "'?", "Please confirm", MessageBoxButtons.YesNoCancel))
+                {
+                    case DialogResult.Yes: AlsoHosts = true; break;
+                    case DialogResult.No: AlsoHosts = false; break;
+                    case DialogResult.Cancel: return;
+                    default: return;
+                }                
+
+                lock (Slaves)
+                {
+                    lock (ComputerTree)
+                    {
+                        if (AlsoHosts)
+                        {
+                            foreach (Slave ss in Group.Slaves) RemoveHost(ss);
+                        }
+
+                        List<TreeNode> Instances = FindAllInstancesOfGroup(Group.Name);
+
+                        foreach (TreeNode tnGroup in Instances)                        
+                            tnGroup.Parent.Nodes.Remove(tnGroup);
+
+                        Groups.Remove(Group);
+                        Legend.Invalidate();
+                    }
+                }
+            }
+
+            SaveHostListToRegistry();
+            SaveGroupListToRegistry();
         }
 
         private void OnConnectNode_MenuItemClick(object sender, EventArgs e)
         {
             if (ContextNode == null) return;
-            Slave ss = ContextNode.Tag as Slave;
-            if (ss == null) return;
             try
             {
-                ss.Connect(false, UserCredentials);
+                if (ContextNode.Tag is Slave)
+                {
+                    Slave ss = ContextNode.Tag as Slave;
+                    ss.Connect(false, UserCredentials);
+                }
+                else if (ContextNode.Tag is HostGroup)
+                {
+                    HostGroup Group = ContextNode.Tag as HostGroup;
+                    foreach (Slave ss in Group.Slaves) ss.Connect(false, UserCredentials);
+                }
+                else return;
             }
             catch (Exception ex)
             {
@@ -545,11 +870,19 @@ namespace Parallel_Terminal
         private void OnDisconnectNode_MenuItemClick(object sender, EventArgs e)
         {
             if (ContextNode == null) return;
-            Slave ss = ContextNode.Tag as Slave;
-            if (ss == null) return;
             try
             {
-                ss.Disconnect();
+                if (ContextNode.Tag is Slave)
+                {
+                    Slave ss = ContextNode.Tag as Slave;
+                    ss.Disconnect();
+                }
+                else if (ContextNode.Tag is HostGroup)
+                {
+                    HostGroup Group = ContextNode.Tag as HostGroup;
+                    foreach (Slave ss in Group.Slaves) ss.Disconnect();
+                }
+                else return;
             }
             catch (Exception ex)
             {
@@ -563,21 +896,58 @@ namespace Parallel_Terminal
 
             Point MousePos = e.Location;
             ContextNode = e.Node;
-            Slave ContextSlave = (Slave)ContextNode.Tag;
+            Slave ContextSlave = ContextNode.Tag as Slave;
+            HostGroup ContextGroup = ContextNode.Tag as HostGroup;
 
             MenuItem miConnect = new MenuItem("&Connect", OnConnectNode_MenuItemClick);
             MenuItem miDisconnect = new MenuItem("&Disconnect", OnDisconnectNode_MenuItemClick);
             MenuItem miSep = new MenuItem("-");
+            MenuItem miEditGroups = new MenuItem("Change &Group Memberships...", OnEditMembership_MenuItemClick);
             MenuItem miRemove = new MenuItem("&Remove Host", OnRemoveNode_MenuItemClick);
-            miConnect.Enabled = ContextSlave.IsDisconnected;
-            miDisconnect.Enabled = !ContextSlave.IsDisconnected;
 
-            MenuItem[] menuItems = new MenuItem[]{
-                miConnect,
-                miDisconnect,
-                miSep,
-                miRemove
-            };
+            MenuItem[] menuItems;
+            if (ContextSlave != null)
+            {
+                miConnect.Enabled = ContextSlave.IsDisconnected;
+                miDisconnect.Enabled = !ContextSlave.IsDisconnected;
+
+                menuItems = new MenuItem[]{
+                    miConnect,
+                    miDisconnect,
+                    miSep,
+                    miEditGroups,
+                    miRemove
+                };
+            }
+            else if (ContextGroup != null)
+            {
+                miConnect.Enabled = ContextGroup.CanConnect;
+                miDisconnect.Enabled = ContextGroup.CanDisconnect;
+
+                menuItems = new MenuItem[]{
+                    miConnect,
+                    miDisconnect,
+                    miSep,
+                    miRemove
+                };
+            }
+            else if (e.Node == HostNodes)
+            {
+                MenuItem miAdd = new MenuItem("&Add Host", addHostStripMenuItem_Click);
+
+                menuItems = new MenuItem[]{
+                    miAdd
+                };
+            }
+            else if (e.Node == GroupNodes)
+            {
+                MenuItem miAdd = new MenuItem("&Add Group", addGroupToolStripMenuItem_Click);
+
+                menuItems = new MenuItem[]{
+                    miAdd
+                };
+            }
+            else return;
 
             ContextMenu buttonMenu = new ContextMenu(menuItems);
             buttonMenu.Show(ComputerTree, MousePos);
@@ -592,6 +962,6 @@ namespace Parallel_Terminal
                     if (ss.IsConnected) ss.Connection.SendReloadConsoleRequest();
                 }
             }
-        }
+        }        
     }
 }
