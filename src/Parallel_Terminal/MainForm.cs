@@ -776,8 +776,10 @@ namespace Parallel_Terminal
                     Terminal.RemoveSlave(ss);
                     foreach (TreeNode tn in Instances)
                     {
-                        tn.Parent.Nodes.Remove(tn);
-                        tn.Parent.Text = ((HostGroup)tn.Parent.Tag).GetDisplayText();
+                        TreeNode Parent = tn.Parent;
+                        Parent.Nodes.Remove(tn);
+                        if (Parent.Tag as HostGroup != null)
+                            Parent.Text = ((HostGroup)Parent.Tag).GetDisplayText();
                     }
                     Legend.Invalidate();
                 }
