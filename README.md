@@ -20,12 +20,18 @@ Once the service is running, you can connect at any time by launching the Parall
 
 The only dependency is the .NET Framework v4.6.1, required for both Parallel Terminal and the Host Portal.  The software has been tested with Windows 8.1, but is unlikely to work on older Windows versions (i.e. I tested with Windows Server 2012 and was unable to connect).
 
+## Compatibility
+
+Parallel Terminal has been successfully tested on Windows 8.1 so far.
+
+Host Portal has been successfully tested on Windows 8.1 and Windows 7 so far.
+Host Portal appears to fail on Windows Server 2012.  Reason unknown.
+
 ## Contributing
 
 Contributions welcome!  Please contact me before diving in.  The current TODO list:
 
 * Copy-and-paste functionality.
-* Ability to group computers and connect to groups instead of auto-connecting at program open.
 * Linux host portal.
 
 ## Authors
