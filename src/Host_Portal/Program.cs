@@ -11,6 +11,7 @@ using System.Configuration.Install;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Threading;
 
 namespace Host_Portal
 {
@@ -88,6 +89,24 @@ namespace Host_Portal
             var type = asm.GetType("Host_Portal.HostPortalService");
             ServiceBase runnable = Activator.CreateInstance(type) as HostPortalService;
             if (runnable == null) throw new Exception("Unable to load Core_Library.dll or entry-point service class.");
+            return runnable;
+        }
+
+        /// <summary>
+        /// 1. First, we check for a Core_Library_Update.dll file and replace Core_Library.dll if it exists.
+        /// 2. We load the Core_Library.dll into this application domain.
+        /// 3. We return the console entry-point for HostPortalConsole.
+        /// 
+        /// This approach facilitates a self-update by providing a Core_Library_Update.dll file in the same
+        /// directory and then rebooting so that this check/reload will take place.
+        /// </summary>
+        /// <returns></returns>
+        static Host_Portal.HostPortalConsole LoadConsoleCode()
+        {
+            var asm = Assembly.LoadFile(System.IO.Path.Combine(AssemblyDirectory, "Core_Library.dll"));
+            var type = asm.GetType("Host_Portal.HostPortalConsole");
+            Host_Portal.HostPortalConsole runnable = Activator.CreateInstance(type) as HostPortalConsole;
+            if (runnable == null) throw new Exception("Unable to load Core_Library.dll or entry-point console class.");
             return runnable;
         }
 
@@ -194,7 +213,37 @@ namespace Host_Portal
                     Console.WriteLine("Testing DLL load...");
                     LoadServiceCode();
                 }
-                else throw new Exception("Either 'install' or 'uninstall' argument required.");
+                else if (Command == "console")
+                {
+                    Console.WriteLine("Launching in console mode...");
+                    try
+                    {
+                        UpdateServiceCode();
+                        using (Host_Portal.HostPortalConsole Core = LoadConsoleCode())
+                        {
+                            Core.Start();
+                            Console.WriteLine("Console launched.  Press X key to exit.");
+                            for (;;)
+                            {
+                                if (Console.KeyAvailable)
+                                {
+                                    ConsoleKeyInfo ki = Console.ReadKey();
+                                    if (ki.KeyChar == 'X' || ki.KeyChar == 'x') break;                                    
+                                }
+                                Thread.Sleep(50);
+                            }
+                            Console.WriteLine("Exitting...");
+                            Core.Stop();
+                            Console.WriteLine("Console stopped successfully.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Unhandled exception coming from the host portal console: " + ex.ToString());
+                        return;
+                    }                    
+                }
+                else throw new Exception("Either 'install', 'uninstall', or 'console' argument required.");
             }            
             catch (Exception ex)
             {

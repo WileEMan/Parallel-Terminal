@@ -1,0 +1,6 @@
+﻿TODO: when I try to access a machine using logon credentials that aren't valid for that machine (probably "permission to logon locally" or something) I get a communication error message/timeout instead of an informative, "Your credentials are
+no good here." message.
+
+TODO: copy-and-paste would be very nice.
+
+I've tried with Windows Server 2012 and a Windows 7 machine.  I get the blank response.  Don't even get the terminal connected message, so it might just be a network issue or dependency.

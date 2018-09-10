@@ -48,6 +48,7 @@
     <Compile Include="Framework\ConsoleApi.cs" />
     <Compile Include="Framework\ProcessLauncher.cs" />
     <Compile Include="Framework\wbPipes.cs" />
+    <Compile Include="HostPortalConsole.cs" />
     <Compile Include="HostPortalService.cs">
       <SubType>Component</SubType>
     </Compile>

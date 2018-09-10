@@ -14,12 +14,7 @@ using System.Diagnostics;
 using System.Globalization;
 
 namespace Parallel_Terminal
-{    
-    // TODO: when I try to access a machine using logon credentials that aren't valid for that machine (probably "permission to logon locally" or something) I get a communication error message/timeout instead of an informative, "Your credentials are
-    // no good here." message.
-
-    // TODO: copy-and-paste would be very nice.
-    
+{           
     /// <summary>
     /// TerminalControl contains the primary visual/GUI work of this application in organizing the lines coming in from multiple hosts and "diff"-ing them, so to speak.  Actually the goal is more to merge common
     /// lines than to diff them.  The key data structures of TerminalControl are:

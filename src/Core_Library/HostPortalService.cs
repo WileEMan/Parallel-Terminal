@@ -62,5 +62,5 @@ namespace Host_Portal
         {
             if (Core != null) { Core.Stop(); Core = null; }
         }
-    }
+    }    
 }
