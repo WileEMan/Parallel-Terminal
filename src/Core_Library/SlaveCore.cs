@@ -356,6 +356,17 @@ namespace Core_Library
                         byte[] RawMsg = Encoding.Unicode.GetBytes(XmlMsg);
                         if (NetworkStream != null) SendMessage(NetworkStream, RawMsg);
                     }
+                    catch (Win32Exception ex)
+                    {
+                        Log.WriteLine("Exception accepting new connection: " + ex.ToString(), Severity.Debug);
+                        if ((uint)ex.ErrorCode == 0x80004005)
+                        {
+                            // The credentials supplied to the pacakage were not recognized.
+                            // This error comes up rom NetworkStream.AuthenticateAsServer() or GetRemoteDesktopCertificate() for localhost slave when there is no administrative access.                            
+                            Log.WriteLine("This exception usually indicates that administrative access was required but not present.", Severity.Debug);
+                        }
+                        continue;
+                    }
                     catch (Exception ex)
                     {
                         // Note: "The credentials supplied to the package were not recognized" is probably a sign that the code doesn't have Administrator access and can't access the subsystem or certificate it needs.
@@ -588,11 +599,11 @@ namespace Core_Library
 
                                     if (!ConsoleApi.AttachConsole((uint)ConnectedProcess.CommandPrompt.ProcessId))
                                     {
-                                        Debug.WriteLine("AttachConsole() failed.");
+                                        this.Log.WriteLine("AttachConsole() failed.", Severity.Debug);
                                         throw new Win32Exception(Marshal.GetLastWin32Error());
                                     }
 
-                                    Debug.WriteLine("Console attached.");
+                                    this.Log.WriteLine("Console attached.", Severity.Debug);
 
                                     if (Conin != null) { Conin.Dispose(); Conin = null; }
                                     Conin = new ConsoleInput();
@@ -600,12 +611,13 @@ namespace Core_Library
                                     if (CT != null) { CT.Dispose(); CT = null; }
                                     CT = new ConsoleTracker();
 
-                                    Debug.WriteLine("Console established without errors.");
+                                    this.Log.WriteLine("Console established without errors.", Severity.Debug);
                                 }
                                 finally
                                 {
                                     if (ConnectedProcess.CommandPrompt.DebugLog.Length > 0)
                                     {
+                                        this.Log.WriteLine(ConnectedProcess.CommandPrompt.DebugLog.ToString(), Severity.Debug);
                                         string XmlMsg = "<Debug>" + ConnectedProcess.CommandPrompt.DebugLog.ToString() + "</Debug>";
                                         byte[] RawMsg = Encoding.Unicode.GetBytes(XmlMsg);
                                         SendMessage(NetworkStream, RawMsg);

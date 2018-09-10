@@ -3,4 +3,5 @@ no good here." message.
 
 TODO: copy-and-paste would be very nice.
 
-I've tried with Windows Server 2012 and a Windows 7 machine.  I get the blank response.  Don't even get the terminal connected message, so it might just be a network issue or dependency.
+Windows 7 was made to work once I added the TriggerFirewallWarnings() routine to the installation procedure.  
+Windows Server 2012 wasn't working, but I suspect the same fix for Windows 7 might work for 2012.

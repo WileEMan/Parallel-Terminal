@@ -190,8 +190,30 @@ namespace Host_Portal
                     }
                     else
                     {
-                        if (!SelfInstaller.InstallMe())
-                            Console.WriteLine("Failure reported.");
+                        try
+                        {
+                            Console.WriteLine("");
+                            Console.WriteLine("Starting installation...");
+
+                            Console.WriteLine("");
+                            Console.WriteLine("Connecting to core DLL...");
+                            UpdateServiceCode();
+                            Host_Portal.HostPortalService Core = LoadServiceCode() as Host_Portal.HostPortalService;
+
+                            Console.WriteLine("");
+                            Console.WriteLine("Testing network connectivity and triggering firewall allowances request...");
+                            Core.TriggerFirewallWarnings();
+
+                            Console.WriteLine("");
+                            Console.WriteLine("Starting service installation...");
+                            if (!SelfInstaller.InstallMe())
+                                Console.WriteLine("Installation failure reported/logged.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("");
+                            Console.WriteLine("Installation failed: " + ex.Message);
+                        }
                     }
                 }
                 else if (Command == "uninstall")
@@ -215,7 +237,8 @@ namespace Host_Portal
                 }
                 else if (Command == "console")
                 {
-                    Console.WriteLine("Launching in console mode...");
+                    Console.WriteLine("WARNING: Console mode doesn't really work because the command-line run already has a console, and an app can be attached to at most one console.");
+                    Console.WriteLine("Launching in console mode...");                    
                     try
                     {
                         UpdateServiceCode();
@@ -243,7 +266,7 @@ namespace Host_Portal
                         return;
                     }                    
                 }
-                else throw new Exception("Either 'install', 'uninstall', or 'console' argument required.");
+                else throw new Exception("Either 'install' or 'uninstall' argument required.");
             }            
             catch (Exception ex)
             {

@@ -62,5 +62,38 @@ namespace Host_Portal
         {
             if (Core != null) { Core.Stop(); Core = null; }
         }
+
+        /// <summary>
+        /// Call TriggerFirewallWarnings() from the installation process in order to momentarily trigger the firewall warning messages that must be accepted on Windows 7 for
+        /// the service to operate.
+        /// </summary>
+        public void TriggerFirewallWarnings()
+        {
+            TcpListener listenerV4 = new TcpListener(IPAddress.Any, CommonCore.PortNumber);
+            TcpListener listenerV6 = new TcpListener(IPAddress.IPv6Any, CommonCore.PortNumber);
+            listenerV4.Start(10);
+            listenerV6.Start(10);
+
+            // Start listening for connections, but close them immediately if received.
+
+            Stopwatch sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < 15000)
+            {
+                TcpClient ClientRequest;
+                try
+                {
+                    if (listenerV4.Pending())
+                        ClientRequest = listenerV4.AcceptTcpClient();
+                    else if (listenerV6.Pending())
+                        ClientRequest = listenerV6.AcceptTcpClient();
+                    else { Thread.Sleep(250); continue; }
+
+                    ClientRequest.Close();
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
     }    
 }

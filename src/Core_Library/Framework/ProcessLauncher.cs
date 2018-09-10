@@ -111,6 +111,8 @@ namespace wb
 
         public bool Start()
         {
+            DebugLog.AppendLine("ProcessLauncher Start() beginning...");
+
             Close();
             ProcessStartInfo startInfo = StartInfo;
             if (startInfo.FileName.Length == 0)
@@ -123,7 +125,7 @@ namespace wb
                  *  As per the CreateProcessAsUser() documentation:
                         Typically, the process that calls the CreateProcessAsUser function must have the SE_INCREASE_QUOTA_NAME privilege and may require the SE_ASSIGNPRIMARYTOKEN_NAME privilege if the token is not assignable.
                         If this function fails with ERROR_PRIVILEGE_NOT_HELD (1314), use the CreateProcessWithLogonW function instead.CreateProcessWithLogonW requires no special privileges, but the specified user account must 
-                        be allowed to log on interactively.Generally, it is best to use CreateProcessWithLogonW to create a process with alternate credentials.
+                        be allowed to log on interactively.  Generally, it is best to use CreateProcessWithLogonW to create a process with alternate credentials.
                         ...
                         If hToken is a restricted version of the caller's primary token, the SE_ASSIGNPRIMARYTOKEN_NAME privilege is not required. If the necessary privileges are not already enabled, CreateProcessAsUser 
                         enables them for the duration of the call.
@@ -138,6 +140,7 @@ namespace wb
                 {
                     try
                     {
+                        DebugLog.AppendLine("\tTrying StartAux() with CreateProcessAsUser() mechanism.");
                         return StartAux(startInfo, Mechanism.CreateProcessAsUser);
                     }
                     catch (Win32Exception wex)
@@ -145,6 +148,9 @@ namespace wb
                         const int ERROR_PRIVILEGE_NOT_HELD = 1314;
                         if (wex.NativeErrorCode == ERROR_PRIVILEGE_NOT_HELD)
                         {
+                            // This mode comes up routinely when I launch the localhost embedded in the app.  But, it correctly sets the
+                            // environment/username to a different user if that's what I gave as credentials.
+                            DebugLog.AppendLine("\tTrying StartAux() with CreateProcessWithLogonW() mechanism.");
                             return StartAux(startInfo, Mechanism.CreateProcess);
                         }
                         else
@@ -155,7 +161,10 @@ namespace wb
                     }
                 }
                 else
+                {
+                    DebugLog.AppendLine("\tTrying StartAux() with CreateProcess() mechanism.");
                     return StartAux(startInfo, Mechanism.CreateProcess);
+                }
             }
         }
 
@@ -344,22 +353,6 @@ namespace wb
 
                     // set up the environment block parameter
                     IntPtr environmentPtr = (IntPtr)0;
-#if false
-                    if (startInfo.environmentVariables != null)
-                    {
-                        bool unicode = false;
-
-                        if (ProcessManager.IsNt)
-                        {
-                            creationFlags |= NativeMethods.CREATE_UNICODE_ENVIRONMENT;
-                            unicode = true;
-                        }
-
-                        byte[] environmentBytes = EnvironmentBlock.ToByteArray(startInfo.environmentVariables, unicode);
-                        environmentHandle = GCHandle.Alloc(environmentBytes, GCHandleType.Pinned);
-                        environmentPtr = environmentHandle.AddrOfPinnedObject();
-                    }
-#endif
 
                     string workingDirectory = startInfo.WorkingDirectory;
                     if (workingDirectory == string.Empty)
