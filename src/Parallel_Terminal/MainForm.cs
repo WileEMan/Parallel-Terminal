@@ -923,6 +923,7 @@ namespace Parallel_Terminal
             }
             else if (ContextGroup != null)
             {
+                miRemove.Text = "&Remove Group";
                 miConnect.Enabled = ContextGroup.CanConnect;
                 miDisconnect.Enabled = ContextGroup.CanDisconnect;
 
