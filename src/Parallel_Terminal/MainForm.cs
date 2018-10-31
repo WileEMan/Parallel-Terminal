@@ -182,7 +182,13 @@ namespace Parallel_Terminal
                     }
                 }
 
-                ComputerTree_AfterCheck(null, null);                
+                ComputerTree_AfterCheck(null, null);
+
+                if (!IsOnScreen(this))
+                {
+                    Top = 10; Left = 10;
+                    Width = 1000; Height = 1000;
+                }
 
                 Application.DoEvents();         // Clear out any keyboard events.
                 Terminal.Enabled = true;        // Enable keyboard input after dialog box.
@@ -191,6 +197,17 @@ namespace Parallel_Terminal
                 MessageBox.Show(ex.ToString());
                 Close();
             }            
+        }
+
+        public static bool IsOnScreen(Form form)
+        {
+            Screen[] screens = Screen.AllScreens;
+            foreach (Screen screen in screens)
+            {
+                if (screen.WorkingArea.IntersectsWith(form.ClientRectangle)) return true;
+            }
+
+            return false;
         }
 
         private void MainForm_FormClosed(object sender, FormClosedEventArgs e)

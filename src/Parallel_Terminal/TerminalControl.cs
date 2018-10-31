@@ -545,6 +545,8 @@ namespace Parallel_Terminal
         {
             lock (SlaveBuffers)
             {
+                if (!SlaveBuffers.ContainsKey(RemoveSlave)) return;
+
                 // Before we remove this SlaveBuffer, we need to disconnect it from all sibling listings.
                 SlaveBuffer SlaveBuffer = SlaveBuffers[RemoveSlave];
                 for (int ii=0; ii < SlaveBuffer.Lines.Count; ii++)
